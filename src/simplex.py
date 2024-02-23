@@ -58,7 +58,6 @@ def find_maximum_md(f: Callable, args_amount: int, start: float, end: float, eps
             # Midpoint is the sum of point coordinates for this particular dimension divided by the amount of points
             midpoint_coordinate = (sum([c[i] for c in simplex_vertices]) - simplex_vertices[min_value_index][i]) / args_amount
             median_midpoint.append(midpoint_coordinate)
-        # print(median_midpoint)
 
         vertex_adjustment_vector = [median_midpoint[i] - simplex_vertices[min_value_index][i] for i in range(0, args_amount)]
         vertex_adjustment_vector = [x * 0.5 if decrease_search_area else x * 2 for x in vertex_adjustment_vector]
@@ -84,8 +83,6 @@ def find_maximum_md(f: Callable, args_amount: int, start: float, end: float, eps
         if hash in prev_coord_hashes_stack:
             decrease_search_area = True
             prev_coord_hashes_stack = []
-
-        # print(simplex_vertices)
 
         iterations += 1
 
