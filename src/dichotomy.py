@@ -1,6 +1,4 @@
-import math
 from typing import Callable
-from datetime import datetime
 
 def find_maximum(f: Callable, min: float, max: float, delta: float, eps: float):
     """
