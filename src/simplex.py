@@ -1,70 +1,96 @@
+import math
 from typing import Callable
 
-from src.primitives.point import Point
+def truncate(n, decimals=0):
+    multiplier = 10**decimals
+    return int(n * multiplier) / multiplier
 
-def find_maximum_3d(f: Callable, min_x: float, min_y: float, max_x: float, max_y: float, eps: float):
-    x1 = min_x + (max_x - min_x) / 10
-    y1 = min_y + (max_y - min_y) / 10
+def simplex_hash(vertices):
+    result = ""
+    for v in vertices:
+        for c in v:
+            result += str(truncate(c, 10))
 
-    v1 = Point(min_x, min_y)
-    v2 = Point(x1, min_y)
-    v3 = Point(min_x, y1)
-    points_hash = str(v1) + str(v2) + str(v3)
+    return result
 
-    prev_coords_stack = []
-    i = 0
+def find_maximum_md(f: Callable, args_amount: int, start: float, end: float, eps: float):
+    adjusted_coordinate = start + (end - start) / 10
+
+    """
+    Now we're creating a set of args_amount + 1 n-th dimensional points (simplex vertices) with every
+    point having a unique coordinate:
+    (min, min, min, min, min)
+    (adjusted_coord, min, min, min, min)
+    (min, adjusted_coord, min, min, min)
+    (min, min, adjusted_coord, min, min)
+    ...
+    (min, min, min, min, min, adjusted_coord)
+    """
+    simplex_vertices = [[start for j in range(0, args_amount)]]
+    for i in range(0, args_amount):
+        coords = [start for j in range(0, args_amount)]
+        coords[i] = adjusted_coordinate
+        simplex_vertices.append(coords)
+
+    """
+    We're gonna use hashed values to determinate if we start walking in circles. Generally, making circle means
+    that we're somewhere close to extremum point, and we have to decrease simplex size to increase algorithm precision
+    """
+    prev_coord_hashes_stack = []
+    hash = simplex_hash(simplex_vertices)
+
+    iterations = 0
+    min_value_index = 0
     decrease_search_area = False
-    while i < 1000:
-        prev_coords_stack.append(points_hash)
-        fv1 = f(v1.x, v1.y)
-        fv2 = f(v2.x, v2.y)
-        fv3 = f(v3.x, v3.y)
+    while iterations < 1000:
+        prev_coord_hashes_stack.append(hash)
 
-        # We need to switch operators for finding minimal value
-        if fv1 <= fv2 and fv1 <= fv3:
-            height_midpoint = Point.midpoint(v2, v3)
-            height_vector = v1.vector_to(height_midpoint)
-            height_vector.multiply(0.5 if decrease_search_area else 2)
-            v1.add_vector(height_vector)
+        values = [f(*v) for v in simplex_vertices]
+        min_value_index = values.index(min(values))
 
-            if v1.x > max_x:
-                v1.x = max_x
-            if v1.y > max_y:
-                v1.y = max_y
-        elif fv2 <= fv1 and fv2 <= fv3:
-            height_midpoint = Point.midpoint(v1, v3)
-            height_vector = v2.vector_to(height_midpoint)
-            height_vector.multiply(0.5 if decrease_search_area else 2)
-            v2.add_vector(height_vector)
+        """
+        Now we have to define a vector connecting the weakest vertex with a center of opposite side of the simplex
+        (which will be the median) and then multiply it by 2 if we want to move point one step forward, or by 0.5
+        if we want to increase the algorithm precision 
+        """
+        median_midpoint = []
+        for i in range(0, args_amount):
+            # Midpoint is the sum of point coordinates for this particular dimension divided by the amount of points
+            midpoint_coordinate = (sum([c[i] for c in simplex_vertices]) - simplex_vertices[min_value_index][i]) / args_amount
+            median_midpoint.append(midpoint_coordinate)
+        # print(median_midpoint)
 
-            if v2.x > max_x:
-                v2.x = max_x
-            if v2.y > max_y:
-                v2.y = max_y
-        elif fv3 <= fv1 and fv3 <= fv2:
-            height_midpoint = Point.midpoint(v1, v2)
-            height_vector = v3.vector_to(height_midpoint)
-            height_vector.multiply(0.5 if decrease_search_area else 2)
-            v3.add_vector(height_vector)
+        vertex_adjustment_vector = [median_midpoint[i] - simplex_vertices[min_value_index][i] for i in range(0, args_amount)]
+        vertex_adjustment_vector = [x * 0.5 if decrease_search_area else x * 2 for x in vertex_adjustment_vector]
 
-            if v3.x > max_x:
-                v3.x = max_x
-            if v3.y > max_y:
-                v3.y = max_y
+        simplex_vertices[min_value_index] = [simplex_vertices[min_value_index][i] + vertex_adjustment_vector[i] for i in range(0, args_amount)]
+
+        # This way we don't let algorithm go outside the search zone
+        for i in range(0, args_amount):
+            if simplex_vertices[min_value_index][i] > end:
+                simplex_vertices[min_value_index][i] = end
+            if simplex_vertices[min_value_index][i] < start:
+                simplex_vertices[min_value_index][i] = start
 
         if decrease_search_area:
-            prev_coords_stack = []
             decrease_search_area = False
 
-        points_hash = str(v1) + str(v2) + str(v3)
-        if points_hash in prev_coords_stack:
-            # It means that we started to walk in circles
-            if v1.distance_to(v2) + v1.distance_to(v3) + v2.distance_to(v3) < eps:
+            # New edge size is generally the distance from the moved vertex to any other vertex
+            edge_size = math.sqrt(sum([(simplex_vertices[min_value_index][i] - simplex_vertices[min_value_index - 1][i]) ** 2 for i in range(0, args_amount)]))
+            if edge_size < eps:
                 break
 
+        hash = simplex_hash(simplex_vertices)
+        if hash in prev_coord_hashes_stack:
             decrease_search_area = True
+            prev_coord_hashes_stack = []
 
-        i += 1
+        # print(simplex_vertices)
 
-    # Ideally we would like to take a point in the middle of the triangle, but who the fuck care
-    return [v1.x, v1.y]
+        iterations += 1
+
+    """
+    Ideally we would like to give it another round and return the middle point of all vertices, but doesn't worth the
+    computational power
+    """
+    return simplex_vertices[min_value_index]
