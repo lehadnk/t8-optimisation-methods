@@ -1,7 +1,7 @@
 import unittest
 from functions_3d import f1, f2, f3
 from functions_5d import f1_5d, f2_5d
-from src.simplex import find_maximum_3d, find_maximum_md
+from src.simplex import find_maximum_md
 import math
 
 class TestSimplexMethods(unittest.TestCase):
